@@ -17,15 +17,24 @@ SECRET_KEY = 'django-insecure-a&vzf63dc445_eyc9cxj9kcx*h7#bk((z9p2bw&y_jl6sh8oq4
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
-    if host.strip()
+    "localhost",
+    "127.0.0.1",
+    "bibliotheque-backend-qf3e.onrender.com",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://bibliotheque-backend-qf3e.onrender.com",
 ]
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    "https://bibliotheque-backend-qf3e.onrender.com",
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 
 # Application definition

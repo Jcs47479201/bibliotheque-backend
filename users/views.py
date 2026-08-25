@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from .serializers import UserSerializer, UserCreateSerializer, RegisterSerializer
 from .models import User
 from .permissions import CanManageOrganisationUsers, current_membership
@@ -105,4 +105,4 @@ class OrganisationUserDetailView(APIView):
 #Création d'un user lors de l'inscription
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
-    permission_classes = []
+    permission_classes = [IsAdminUser]

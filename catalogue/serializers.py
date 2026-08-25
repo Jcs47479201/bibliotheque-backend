@@ -32,4 +32,4 @@ class AuteurCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Auteur
         fields = ["id", "nom", "bibliotheque", "date_creation", "date_modification"]
-        read_only_fields = ["id", "date_cration", "date_modification"]
+        read_only_fields = ["id", "bibliotheque", "date_creation", "date_modification"]

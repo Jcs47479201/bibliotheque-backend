@@ -7,18 +7,18 @@ def current_membership(user):
 
 
 def is_platform_owner(user):
-    membership = current_membership(user)
-    return bool(user.is_superuser or user.is_staff or membership and membership.role == "owner")
+    has_client_space = Membership.objects.filter(user=user, role="owner").exists()
+    return bool((user.is_superuser or user.is_staff) and not has_client_space)
 
 
 def can_manage_organisation_users(user):
     membership = current_membership(user)
-    return bool(is_platform_owner(user) or membership and membership.role == "admin")
+    return bool(is_platform_owner(user) or membership and membership.role in {"owner", "admin"})
 
 
 def is_client_member(user):
     membership = current_membership(user)
-    return bool(membership and membership.role in {"admin", "bibliothecaire"})
+    return bool(membership and membership.role in {"owner", "admin", "bibliothecaire"})
 
 
 class IsPlatformOwner(BasePermission):

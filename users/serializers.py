@@ -27,8 +27,8 @@ class UserSerializer(serializers.ModelSerializer):
         return str(membership.organisation_id) if membership else None
 
     def get_platform_admin(self, obj):
-        membership = Membership.objects.filter(user=obj).first()
-        return bool(obj.is_superuser or obj.is_staff or membership and membership.role == "owner")
+        has_client_space = Membership.objects.filter(user=obj, role="owner").exists()
+        return bool((obj.is_superuser or obj.is_staff) and not has_client_space)
 
 class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:

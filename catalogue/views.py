@@ -225,7 +225,7 @@ class AuteurCreateView(APIView):
                 status=404
             )
 
-        serializer = AuteurSerializer(data=request.data)
+        serializer = AuteurCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
 
@@ -236,8 +236,8 @@ class AuteurCreateView(APIView):
                 status=400
             )
 
-        serializer.save(bibliotheque=bibliotheque)
-        return Response(serializer.data, status=201)
+        auteur = serializer.save(bibliotheque=bibliotheque)
+        return Response(AuteurSerializer(auteur).data, status=201)
 
 ### Update & Delete d'un auteur
 class AuteurDetailView(APIView):

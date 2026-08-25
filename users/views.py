@@ -1,10 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UserSerializer, UserCreateSerializer
+from .serializers import UserSerializer, UserCreateSerializer, RegisterSerializer
 from .models import User
 from .permissions import CanManageOrganisationUsers, current_membership
 from organisation.models import Membership
+from rest_framework import generics
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -100,3 +101,8 @@ class OrganisationUserDetailView(APIView):
             return Response({"detail": "Cet accès ne peut pas être supprimé."}, status=400)
         target.user.delete()
         return Response(status=204)
+
+#Création d'un user lors de l'inscription
+class RegisterView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = []

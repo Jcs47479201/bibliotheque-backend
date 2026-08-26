@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 from .models import Bibliotheque, Adherent
 from organisation.models import Membership
 from .serializers import BibliothequeSerializer, AdherentSerializer, AdherentCreateSerializer
@@ -36,6 +37,7 @@ class PlatformBibliothequesView(APIView):
         libraries = Bibliotheque.objects.select_related("organisation").order_by("nom")
         return Response(BibliothequeSerializer(libraries, many=True).data)
 
+    @transaction.atomic
     def post(self, request):
         serializer = BibliothequeSerializer(data=request.data)
         if not serializer.is_valid():
@@ -81,6 +83,7 @@ class MyAdherentsView(APIView):
 class AdherentCreateView(APIView):
     permission_classes = [IsClientMember]
 
+    @transaction.atomic
     def post(self, request):
         membership = Membership.objects.filter(user=request.user).first()
 
@@ -116,8 +119,8 @@ class AdherentCreateView(APIView):
                 status=400
             )
 
-        serializer.save(bibliotheque=bibliotheque)
-        return Response(serializer.data, status=201)
+        adherent = serializer.save(bibliotheque=bibliotheque)
+        return Response(AdherentSerializer(adherent).data, status=201)
 
 #######################################################################################################
 # UPDATE & DELETE: Gestion de la mise à jour et de la suppression d'un adhérent pour une bibliothèque #

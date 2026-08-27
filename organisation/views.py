@@ -29,7 +29,6 @@ class OrganisationCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         organisation = serializer.save()
-        Membership.objects.get_or_create(user=request.user, organisation=organisation, defaults={"role": "owner"})
         return Response(OrganisationSerializer(organisation).data, status=201)
 
 

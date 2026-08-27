@@ -186,13 +186,13 @@ class LivreCreateView(APIView):
             )
 
         # Vérifier l'auteur
-        if any(auteur.bibliotheque != bibliotheque for auteur in auteurs):
+        if any(auteur.bibliotheque.organisation != organisation for auteur in auteurs):
             return Response(
-                {"detail": "Un auteur n'appartient pas à cette bibliothèque."},
+                {"detail": "Un auteur n'appartient pas à votre organisation."},
                 status=403
             )
 
-        #Vérifier si une catégorie existe déjà
+        #Vérifier si un livre avec ce titre existe déjà
         if Livre.objects.filter(bibliotheque__organisation=membership.organisation).filter(titre=serializer.validated_data["titre"]).exists():
             return Response(
                 {"detail": "Un livre avec ce titre existe déjà."},
@@ -215,24 +215,30 @@ class AuteurCreateView(APIView):
                 status=404
             )
 
-        try:
-            bibliotheque = Bibliotheque.objects.get(
-                organisation=membership.organisation
-            )
-        except Bibliotheque.DoesNotExist:
-            return Response(
-                {"detail": "Bibliothèque non trouvée."},
-                status=404
-            )
-
         serializer = AuteurCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
 
-        # Vérifier si un auteur existe déjà
-        if Auteur.objects.filter(bibliotheque__organisation=membership.organisation).filter(nom=serializer.validated_data["nom"]).exists():
+        bibliotheque = serializer.validated_data.get("bibliotheque")
+        if bibliotheque:
+            if bibliotheque.organisation != membership.organisation:
+                return Response(
+                    {"detail": "Cette bibliothèque n'appartient pas à votre organisation."},
+                    status=403
+                )
+        else:
+            bibliotheque = membership.bibliotheque or Bibliotheque.objects.filter(organisation=membership.organisation).first()
+
+        if not bibliotheque:
             return Response(
-                {"detail": "Un auteur avec ce nom existe déjà."},
+                {"detail": "Aucune bibliothèque trouvée dans cette organisation. Veuillez d'abord en créer une."},
+                status=400
+            )
+
+        # Vérifier si un auteur existe déjà dans cette organisation
+        if Auteur.objects.filter(bibliotheque__organisation=membership.organisation, nom=serializer.validated_data["nom"]).exists():
+            return Response(
+                {"detail": "Un auteur avec ce nom existe déjà dans votre organisation."},
                 status=400
             )
 
@@ -249,7 +255,7 @@ class AuteurDetailView(APIView):
                 id=auteur_id,
                 bibliotheque__organisation=organisation
             )
-        except Auteur.DoesNotExist:
+        except (Auteur.DoesNotExist, ValueError):
             return None
 
     def patch(self, request, auteur_id):
@@ -260,18 +266,23 @@ class AuteurDetailView(APIView):
                 status=404
             )
 
-        adherent = self.get_object(auteur_id, membership.organisation)
-        if not adherent:
+        auteur = self.get_object(auteur_id, membership.organisation)
+        if not auteur:
             return Response(
                 {"detail": "Auteur non trouvé."},
                 status=404
             )
 
-        serializer = AuteurSerializer(adherent, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
+        serializer = AuteurSerializer(auteur, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        bibliotheque = serializer.validated_data.get("bibliotheque")
+        if bibliotheque and bibliotheque.organisation != membership.organisation:
+            return Response({"detail": "Cette bibliothèque n'appartient pas à votre organisation."}, status=403)
+
+        serializer.save()
+        return Response(serializer.data)
 
     def delete(self, request, auteur_id):
         membership = Membership.objects.filter(user=request.user).first()

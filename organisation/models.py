@@ -35,6 +35,7 @@ class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name="memberships")
     organisation = models.ForeignKey(Organisation,on_delete=models.CASCADE,related_name="organisations")
     role = models.CharField(max_length=30,choices=ROLE_CHOICES)  
+    bibliotheque = models.ForeignKey('bibliotheque.Bibliotheque', on_delete=models.SET_NULL, null=True, blank=True, related_name="memberships")
     date_creation = models.DateTimeField(auto_now_add=True)
 
     class Meta:

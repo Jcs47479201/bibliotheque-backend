@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from .serializers import UserSerializer, UserCreateSerializer, RegisterSerializer
 from .models import User
 from .permissions import CanManageOrganisationUsers, current_membership
+from bibliotheque.models import Bibliotheque
 from organisation.models import Membership
 from rest_framework import generics
 
@@ -65,7 +66,21 @@ class OrganisationUsersView(APIView):
         allowed_roles = {"admin", "bibliothecaire"}
         if role not in allowed_roles:
             return Response({"detail": "Rôle utilisateur invalide."}, status=400)
-        Membership.objects.create(user=user, organisation=membership.organisation, role=role)
+
+        bibliotheque_id = request.data.get("bibliotheque") or request.data.get("bibliotheque_id")
+        bibliotheque = None
+        if bibliotheque_id:
+            try:
+                bibliotheque = Bibliotheque.objects.get(id=bibliotheque_id, organisation=membership.organisation)
+            except (Bibliotheque.DoesNotExist, ValueError):
+                return Response({"detail": "Cette bibliothèque n'appartient pas à votre organisation."}, status=400)
+
+        Membership.objects.create(
+            user=user,
+            organisation=membership.organisation,
+            role=role,
+            bibliotheque=bibliotheque
+        )
         return Response(UserSerializer(user).data, status=201)
 
 
@@ -80,16 +95,35 @@ class OrganisationUserDetailView(APIView):
         ).select_related("user").first()
 
     def patch(self, request, user_id):
+        membership = current_membership(request.user)
         target = self.get_membership(request, user_id)
         if not target:
             return Response({"detail": "Utilisateur non trouvé."}, status=404)
         if target.user_id == request.user.id:
             return Response({"detail": "Vous ne pouvez pas modifier votre propre accès ici."}, status=400)
-        role = request.data.get("role", target.role)
-        if role not in {"admin", "bibliothecaire"}:
-            return Response({"detail": "Rôle utilisateur invalide."}, status=400)
-        target.role = role
-        target.save(update_fields=["role"])
+
+        update_fields = []
+        if "role" in request.data:
+            role = request.data.get("role")
+            if role not in {"admin", "bibliothecaire"}:
+                return Response({"detail": "Rôle utilisateur invalide."}, status=400)
+            target.role = role
+            update_fields.append("role")
+
+        if "bibliotheque" in request.data or "bibliotheque_id" in request.data:
+            bibliotheque_id = request.data.get("bibliotheque") or request.data.get("bibliotheque_id")
+            if bibliotheque_id:
+                try:
+                    target.bibliotheque = Bibliotheque.objects.get(id=bibliotheque_id, organisation=membership.organisation)
+                except (Bibliotheque.DoesNotExist, ValueError):
+                    return Response({"detail": "Cette bibliothèque n'appartient pas à votre organisation."}, status=400)
+            else:
+                target.bibliotheque = None
+            update_fields.append("bibliotheque")
+
+        if update_fields:
+            target.save(update_fields=update_fields)
+
         serializer = UserSerializer(target.user)
         return Response(serializer.data)
 

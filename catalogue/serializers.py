@@ -12,7 +12,7 @@ class AuteurSerializer(serializers.ModelSerializer):
     class Meta:
         model = Auteur
         fields = ["id", "nom", "bibliotheque", "date_creation", "date_modification"]
-        read_only_fields = ["id", "date_création", "date_modification", "bibliotheque"]
+        read_only_fields = ["id", "date_creation", "date_modification"]
 
 class LivreSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,4 +32,7 @@ class AuteurCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Auteur
         fields = ["id", "nom", "bibliotheque", "date_creation", "date_modification"]
-        read_only_fields = ["id", "bibliotheque", "date_creation", "date_modification"]
+        read_only_fields = ["id", "date_creation", "date_modification"]
+        extra_kwargs = {
+            "bibliotheque": {"required": False}
+        }

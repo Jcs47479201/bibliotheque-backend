@@ -93,19 +93,25 @@ class AdherentCreateView(APIView):
                 status=404
             )
 
-        try:
-            bibliotheque = Bibliotheque.objects.get(
-                organisation=membership.organisation
-            )
-        except Bibliotheque.DoesNotExist:
-            return Response(
-                {"detail": "Bibliothèque non trouvée."},
-                status=404
-            )
-
         serializer = AdherentCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
+
+        bibliotheque = serializer.validated_data.get("bibliotheque")
+        if bibliotheque:
+            if bibliotheque.organisation != membership.organisation:
+                return Response(
+                    {"detail": "Cette bibliothèque n'appartient pas à votre organisation."},
+                    status=403
+                )
+        else:
+            bibliotheque = membership.bibliotheque or Bibliotheque.objects.filter(organisation=membership.organisation).first()
+
+        if not bibliotheque:
+            return Response(
+                {"detail": "Aucune bibliothèque trouvée dans cette organisation. Veuillez d'abord en créer une."},
+                status=400
+            )
 
         # Vérifier si un adhérent existe déjà
         if Adherent.objects.filter(bibliotheque__organisation=membership.organisation).filter(
@@ -115,7 +121,7 @@ class AdherentCreateView(APIView):
             contact=serializer.validated_data["contact"]
         ).exists():
             return Response(
-                {"detail": "Un adhérent avec ce mail existe déjà."},
+                {"detail": "Un adhérent avec ces coordonnées existe déjà."},
                 status=400
             )
 

@@ -36,34 +36,29 @@ class EmpruntCreateAPI(APIView):
                 status=404
             )
 
-        try:
-            bibliotheque = Bibliotheque.objects.get(
-                organisation=membership.organisation
-            )
-        except Bibliotheque.DoesNotExist:
+        serializer = EmpruntCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        livre = serializer.validated_data["livre"]
+        adherent = serializer.validated_data["adherent"]
+
+        # Vérification du livre
+        if livre.bibliotheque.organisation != membership.organisation:
             return Response(
-                {"detail": "Bibliothèque non trouvée."},
-                status=404
+                {"detail": "Ce livre n'appartient pas à votre organisation."},
+                status=403
             )
 
-            #vérification de livres
-            if livre.organisation != organisation:
-                return Response(
-                    {"detail": "Ce livre n'appartient pas à votre organisation."},
-                    status=404
-                )
-            
-            #vérification de l'Adhérents
-            if adherent.bibliotheque.organisation != organisation:
-                return Response(
-                    {"detail": "Cet adhérent n'appartient pas à votre organisation."},
-                    status=404
-                )
-        serializer = EmpruntCreateSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(bibliotheque=bibliotheque)
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
+        # Vérification de l'adhérent
+        if adherent.bibliotheque.organisation != membership.organisation:
+            return Response(
+                {"detail": "Cet adhérent n'appartient pas à votre organisation."},
+                status=403
+            )
+
+        emprunt = serializer.save(bibliotheque=livre.bibliotheque)
+        return Response(EmpruntSerializer(emprunt).data, status=201)
 
 #Update & Delete des emprunts
 class EmpruntDetailView(APIView):

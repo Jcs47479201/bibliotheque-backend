@@ -12,11 +12,13 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     organisation_id = serializers.SerializerMethodField()
+    bibliotheque_id = serializers.SerializerMethodField()
+    bibliotheque_nom = serializers.SerializerMethodField()
     platform_admin = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'organisation_id', 'platform_admin']
+        fields = ['id', 'username', 'email', 'role', 'organisation_id', 'bibliotheque_id', 'bibliotheque_nom', 'platform_admin']
 
     def get_role(self, obj):
         membership = Membership.objects.filter(user=obj).first()
@@ -25,6 +27,14 @@ class UserSerializer(serializers.ModelSerializer):
     def get_organisation_id(self, obj):
         membership = Membership.objects.filter(user=obj).first()
         return str(membership.organisation_id) if membership else None
+
+    def get_bibliotheque_id(self, obj):
+        membership = Membership.objects.filter(user=obj).first()
+        return str(membership.bibliotheque_id) if membership and membership.bibliotheque_id else None
+
+    def get_bibliotheque_nom(self, obj):
+        membership = Membership.objects.filter(user=obj).select_related("bibliotheque").first()
+        return membership.bibliotheque.nom if membership and membership.bibliotheque else None
 
     def get_platform_admin(self, obj):
         has_client_space = Membership.objects.filter(user=obj, role="owner").exists()

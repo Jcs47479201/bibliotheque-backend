@@ -3,7 +3,15 @@ from organisation.models import Membership
 
 
 def current_membership(user):
-    return Membership.objects.filter(user=user).select_related("organisation").first()
+    return Membership.objects.filter(user=user).select_related("organisation", "bibliotheque").first()
+
+
+def has_library_access(membership, bibliotheque):
+    if not membership or not bibliotheque:
+        return False
+    if membership.bibliotheque_id:
+        return str(bibliotheque.id) == str(membership.bibliotheque_id)
+    return str(bibliotheque.organisation_id) == str(membership.organisation_id)
 
 
 def is_platform_owner(user):

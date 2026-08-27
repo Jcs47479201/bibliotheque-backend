@@ -5,14 +5,14 @@ from django.db import transaction
 from .models import Bibliotheque, Adherent
 from organisation.models import Membership
 from .serializers import BibliothequeSerializer, AdherentSerializer, AdherentCreateSerializer
-from users.permissions import IsClientMember, IsPlatformOwner
+from users.permissions import IsClientMember, IsPlatformOwner, current_membership, has_library_access
 
 
 class MyBibliothequesView(APIView):
     permission_classes = [IsClientMember]
 
     def get(self, request):
-        membership = Membership.objects.filter( user=request.user).first()
+        membership = current_membership(request.user)
 
         if not membership:
             return Response(
@@ -20,7 +20,10 @@ class MyBibliothequesView(APIView):
                 status=404
             )
 
-        bibliotheques = Bibliotheque.objects.filter(organisation=membership.organisation)
+        if membership.bibliotheque:
+            bibliotheques = Bibliotheque.objects.filter(id=membership.bibliotheque.id)
+        else:
+            bibliotheques = Bibliotheque.objects.filter(organisation=membership.organisation)
 
         serializer = BibliothequeSerializer(
             bibliotheques,
@@ -53,7 +56,7 @@ class MyAdherentsView(APIView):
     permission_classes = [IsClientMember]
 
     def get(self, request, bibliotheque_id):
-        membership = Membership.objects.filter(user=request.user).first()
+        membership = current_membership(request.user)
 
         if not membership:
             return Response(
@@ -61,12 +64,18 @@ class MyAdherentsView(APIView):
                 status=404
             )
 
+        if membership.bibliotheque and str(bibliotheque_id) != str(membership.bibliotheque.id):
+            return Response(
+                {"detail": "Vous n'avez pas l'autorisation d'accéder aux adhérents de cette bibliothèque."},
+                status=403
+            )
+
         try:
             bibliotheque = Bibliotheque.objects.get(
                 id=bibliotheque_id,
                 organisation=membership.organisation
             )
-        except Bibliotheque.DoesNotExist:
+        except (Bibliotheque.DoesNotExist, ValueError):
             return Response(
                 {"detail": "Bibliothèque non trouvée."},
                 status=404
@@ -85,7 +94,7 @@ class AdherentCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        membership = Membership.objects.filter(user=request.user).first()
+        membership = current_membership(request.user)
 
         if not membership:
             return Response(
@@ -98,14 +107,22 @@ class AdherentCreateView(APIView):
             return Response(serializer.errors, status=400)
 
         bibliotheque = serializer.validated_data.get("bibliotheque")
-        if bibliotheque:
-            if bibliotheque.organisation != membership.organisation:
+        if membership.bibliotheque:
+            if bibliotheque and str(bibliotheque.id) != str(membership.bibliotheque.id):
                 return Response(
-                    {"detail": "Cette bibliothèque n'appartient pas à votre organisation."},
+                    {"detail": "Vous n'avez pas l'autorisation de créer un adhérent dans une autre bibliothèque."},
                     status=403
                 )
+            bibliotheque = membership.bibliotheque
         else:
-            bibliotheque = membership.bibliotheque or Bibliotheque.objects.filter(organisation=membership.organisation).first()
+            if bibliotheque:
+                if bibliotheque.organisation != membership.organisation:
+                    return Response(
+                        {"detail": "Cette bibliothèque n'appartient pas à votre organisation."},
+                        status=403
+                    )
+            else:
+                bibliotheque = Bibliotheque.objects.filter(organisation=membership.organisation).first()
 
         if not bibliotheque:
             return Response(
@@ -113,15 +130,15 @@ class AdherentCreateView(APIView):
                 status=400
             )
 
-        # Vérifier si un adhérent existe déjà
-        if Adherent.objects.filter(bibliotheque__organisation=membership.organisation).filter(
+        # Vérifier si un adhérent existe déjà dans cette bibliothèque
+        if Adherent.objects.filter(bibliotheque=bibliotheque).filter(
             nom=serializer.validated_data["nom"], 
             prenom=serializer.validated_data["prenom"],
             email=serializer.validated_data["email"],
             contact=serializer.validated_data["contact"]
         ).exists():
             return Response(
-                {"detail": "Un adhérent avec ces coordonnées existe déjà."},
+                {"detail": "Un adhérent avec ces coordonnées existe déjà dans cette bibliothèque."},
                 status=400
             )
 
@@ -134,38 +151,48 @@ class AdherentCreateView(APIView):
 class AdherentDetailView(APIView):
     permission_classes = [IsClientMember]
 
-    def get_object(self, adherent_id, organisation):
+    def get_object(self, adherent_id, membership):
         try:
+            if membership.bibliotheque:
+                return Adherent.objects.get(
+                    id=adherent_id,
+                    bibliotheque=membership.bibliotheque
+                )
             return Adherent.objects.get(
                 id=adherent_id,
-                bibliotheque__organisation=organisation
+                bibliotheque__organisation=membership.organisation
             )
-        except Adherent.DoesNotExist:
+        except (Adherent.DoesNotExist, ValueError):
             return None
 
     def patch(self, request, adherent_id):
-        membership = Membership.objects.filter(user=request.user).first()
+        membership = current_membership(request.user)
 
         if not membership:
             return Response({"detail": "Aucune organisation associée à cet utilisateur."},
                 status=404
             )
 
-        adherent = self.get_object(adherent_id, membership.organisation)
+        adherent = self.get_object(adherent_id, membership)
         if not adherent:
             return Response(
-                {"detail": "Adhérent non trouvé."},
+                {"detail": "Adhérent non trouvé ou accès non autorisé."},
                 status=404
             )
 
         serializer = AdherentSerializer(adherent, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        bibliotheque = serializer.validated_data.get("bibliotheque")
+        if bibliotheque and not has_library_access(membership, bibliotheque):
+            return Response({"detail": "Vous n'avez pas l'autorisation d'agir sur cette bibliothèque."}, status=403)
+
+        serializer.save()
+        return Response(serializer.data)
 
     def delete(self, request, adherent_id):
-        membership = Membership.objects.filter(user=request.user).first()
+        membership = current_membership(request.user)
 
         if not membership:
             return Response(
@@ -173,10 +200,10 @@ class AdherentDetailView(APIView):
                 status=404
             )
 
-        adherent = self.get_object(adherent_id, membership.organisation)
+        adherent = self.get_object(adherent_id, membership)
         if not adherent:
             return Response(
-                {"detail": "Adhérent non trouvé."},
+                {"detail": "Adhérent non trouvé ou accès non autorisé."},
                 status=404
             )
 
